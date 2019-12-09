@@ -30,8 +30,9 @@ gst_s3_upload(const GstS3UploaderConfig * config,
     const void * buffer, gsize size)
 {
   gchar upload_key[S3_MAX_FILENAME_SIZE];
+  gchar *format = config->key;
   GstS3UploaderConfig *config_shallow_copy = (GstS3UploaderConfig *) config;
-  g_snprintf(upload_key, S3_MAX_FILENAME_SIZE, config->key, g_get_real_time());
+  g_snprintf(upload_key, S3_MAX_FILENAME_SIZE, format, g_get_real_time());
   config_shallow_copy->key = upload_key;
 
   GstS3Uploader *uploader = gst_s3_multipart_uploader_new(config_shallow_copy);
@@ -41,5 +42,6 @@ gst_s3_upload(const GstS3UploaderConfig * config,
                   gst_s3_uploader_complete(uploader);
 
   gst_s3_uploader_destroy(uploader);
+  config_shallow_copy->key = format;
   return ret;
 }
