@@ -1,0 +1,34 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "debug with GDB",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "/usr/bin/gst-launch-1.0",
+      "args": [
+        "-e",
+        "-vv",
+        "--gst-plugin-path=${workspaceFolder}/build",
+        "videotestsrc",
+        "num-buffers=1",
+        "!",
+        "s3sink",
+        "bucket=$BUCKET",
+        "key=key"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/build",
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "preLaunchTask": "build"
+    }
+  ]
+}
