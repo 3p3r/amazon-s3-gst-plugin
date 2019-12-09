@@ -149,7 +149,7 @@ g_object_class_install_property (gobject_class, PROP_REGION,
           "When using this option, you can use a sprintf format as your key with %lld. "
           "The sink automatically fills your key name with Unix timestamp in milliseconds.",
           GST_S3_UPLOADER_CONFIG_DEFAULT_INIT_SPLIT_BUFFERS,
-          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT_ONLY));
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT));
 
   gst_element_class_set_static_metadata (gstelement_class,
       "S3 Sink",
