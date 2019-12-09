@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.2)
 
 project(amazon-s3-gst-plugin)
 
+set(CMAKE_C_STANDARD 99)
 set(CMAKE_CXX_STANDARD 11)
 set(CXX_STANDARD_REQUIRED ON)
 set(CMAKE_VERBOSE_MAKEFILE ON)
@@ -45,22 +46,26 @@ set(PLUGIN_PACKAGE "amazon-s3-gst-plugin")
 set(PLUGIN_VERSION "0.1.0")
 configure_file(src/config.h.in config.h @ONLY)
 
-add_library(s3sink SHARED
-            src/gstawscredentials.cpp
-            src/gstawscredentials.h
-            src/gstawscredentials.hpp
-            src/gsts3elements.c
-            src/gsts3multipartuploader.cpp
-            src/gsts3multipartuploader.h
-            src/gsts3sink.c
-            src/gsts3sink.h
-            src/gsts3uploader.c
-            src/gsts3uploaderconfig.h
-            src/gsts3uploader.h)
+set(GST_S3_ELEMENT_SOURCES src/gsts3elements.c src/gsts3sink.c
+                           src/gsts3uploader.c)
 
-target_link_libraries(s3sink)
+set(GST_S3_PUBLIC_HEADERS src/gstawscredentials.h src/gstawscredentials.hpp)
+
+add_library(gstawscredentials SHARED src/gstawscredentials.cpp)
+add_library(multipartuploader STATIC src/gsts3multipartuploader.cpp)
+add_library(gsts3elements SHARED src/gsts3elements.c src/gsts3sink.c
+                                 src/gsts3uploader.c)
+
+target_link_libraries(gsts3elements multipartuploader gstawscredentials)
 
 enable_testing()
-add_executable(s3sink-check tests/check/s3sink.c)
-target_link_libraries(s3sink-check s3sink)
-add_test(s3sink-test s3sink-check)
+add_executable(gsts3elements-check tests/check/s3sink.c)
+target_link_libraries(gsts3elements-check gsts3elements)
+add_test(gsts3elements-test gsts3elements-check)
+
+set_tests_properties(
+  gsts3elements-test
+  PROPERTIES ENVIRONMENT
+             LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}:$ENV{LD_LIBRARY_PATH}
+             ENVIRONMENT
+             GST_PLUGIN_PATH=${CMAKE_BINARY_DIR})
