@@ -1,6 +1,8 @@
-[![Build Status](https://travis-ci.org/amzn/amazon-s3-gst-plugin.svg?branch=master)](https://travis-ci.org/amzn/amazon-s3-gst-plugin)
-
 ## Amazon S3 Gst Plugin
+
+**NOTE:** This is a fork of the original repository and it's tested solely for Linux 64bit. Changelog:
+
+- Replaced Meson with CMake
 
 A collection of [GStreamer](https://gstreamer.freedesktop.org/) elements to interact
 with the [Amazon Simple Storage Service (S3)](https://aws.amazon.com/s3/).
