@@ -1,0 +1,9 @@
+#pragma once
+
+#ifndef PACKAGE
+#define PACKAGE "@PLUGIN_PACKAGE@"
+#endif
+
+#ifndef VERSION
+#define VERSION "@PLUGIN_VERSION@"
+#endif

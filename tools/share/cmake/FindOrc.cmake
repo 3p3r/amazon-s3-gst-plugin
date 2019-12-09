@@ -1,0 +1,27 @@
+# - Try to find LibOrc-0.4
+# Once done this will define
+#  ORC_FOUND - System has LibOrc
+#  ORC_INCLUDE_DIRS - The LibOrc include directories
+#  ORC_LIBRARIES - The libraries needed to use LibOrc
+#  ORC_DEFINITIONS - Compiler switches required for using LibOrc
+
+FIND_PACKAGE(PkgConfig)
+PKG_CHECK_MODULES(PC_ORC orc-0.4)
+SET(ORC_DEFINITIONS ${PC_ORC_CFLAGS_OTHER})
+
+FIND_PATH(ORC_INCLUDE_DIR orc/orc.h
+    HINTS ${PC_ORC_INCLUDEDIR} ${PC_ORC_INCLUDE_DIRS}
+    PATH_SUFFIXES orc)
+
+FIND_LIBRARY(ORC_LIBRARY NAMES orc-0.4
+    HINTS ${PC_ORC_LIBDIR} ${PC_ORC_LIBRARY_DIRS})
+
+SET(ORC_LIBRARIES ${ORC_LIBRARY})
+SET(ORC_INCLUDE_DIRS ${ORC_INCLUDE_DIR})
+INCLUDE(FindPackageHandleStandardArgs)
+# handle the QUIETLY and REQUIRED arguments and set ORC_FOUND to TRUE
+# if all listed variables are TRUE
+FIND_PACKAGE_HANDLE_STANDARD_ARGS(LibOrc DEFAULT_MSG
+    ORC_LIBRARY ORC_INCLUDE_DIR)
+
+MARK_AS_ADVANCED(ORC_INCLUDE_DIR ORC_LIBRARY)
