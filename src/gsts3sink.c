@@ -145,14 +145,16 @@ g_object_class_install_property (gobject_class, PROP_REGION,
 
   g_object_class_install_property (gobject_class, PROP_SPLIT_BUFFERS,
       g_param_spec_boolean ("split-buffers", "Split Buffers",
-          "Split Buffers Into Individual Uploads",
+          "Split Buffers Into Individual Uploads. "
+          "When using this option, you can use a sprintf format as your key with %lld. "
+          "The sink automatically fills your key name with Unix timestamp in milliseconds.",
           GST_S3_UPLOADER_CONFIG_DEFAULT_INIT_SPLIT_BUFFERS,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT_ONLY));
 
   gst_element_class_set_static_metadata (gstelement_class,
       "S3 Sink",
       "Sink/S3", "Write stream to an Amazon S3 bucket",
-      "Marcin Kolny <marcin.kolny at gmail.com>");
+      "Sepehr Laal <one at hurricanesep.com>");
   gst_element_class_add_static_pad_template (gstelement_class, &sinktemplate);
 
   gstbasesink_class->start = GST_DEBUG_FUNCPTR (gst_s3_sink_start);
