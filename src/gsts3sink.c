@@ -63,6 +63,7 @@ enum
   PROP_BUFFER_SIZE,
   PROP_INIT_AWS_SDK,
   PROP_CREDENTIALS,
+  PROP_SPLIT_BUFFERS,
   PROP_LAST
 };
 
@@ -79,7 +80,7 @@ static gboolean gst_s3_sink_event (GstBaseSink * sink, GstEvent * event);
 static GstFlowReturn gst_s3_sink_render (GstBaseSink * sink,
     GstBuffer * buffer);
 static gboolean gst_s3_sink_query (GstBaseSink * bsink, GstQuery * query);
-
+static gboolean gst_s3_sink_upload_single_buffer(GstS3Sink * sink, GstBuffer * buffer);
 static gboolean gst_s3_sink_fill_buffer (GstS3Sink * sink, GstBuffer * buffer);
 static gboolean gst_s3_sink_flush_buffer (GstS3Sink * sink);
 
@@ -141,6 +142,12 @@ g_object_class_install_property (gobject_class, PROP_REGION,
       g_param_spec_boxed ("aws-credentials", "AWS credentials",
           "The AWS credentials to use", GST_TYPE_AWS_CREDENTIALS,
           G_PARAM_WRITABLE | GST_PARAM_MUTABLE_READY | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_SPLIT_BUFFERS,
+      g_param_spec_boolean ("split-buffers", "Split Buffers",
+          "Split Buffers Into Individual Uploads",
+          GST_S3_UPLOADER_CONFIG_DEFAULT_INIT_SPLIT_BUFFERS,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT_ONLY));
 
   gst_element_class_set_static_metadata (gstelement_class,
       "S3 Sink",
@@ -264,6 +271,9 @@ gst_s3_sink_set_property (GObject * object, guint prop_id,
         gst_aws_credentials_free (sink->config.credentials);
       sink->config.credentials = gst_aws_credentials_copy (g_value_get_boxed (value));
       break;
+    case PROP_SPLIT_BUFFERS:
+      sink->config.split_buffers = g_value_get_boolean (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -298,6 +308,9 @@ gst_s3_sink_get_property (GObject * object, guint prop_id, GValue * value,
     case PROP_INIT_AWS_SDK:
       g_value_set_boolean (value, sink->config.init_aws_sdk);
       break;
+    case PROP_SPLIT_BUFFERS:
+      g_value_set_boolean (value, sink->config.split_buffers);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -319,11 +332,11 @@ gst_s3_sink_start (GstBaseSink * basesink)
       || gst_s3_sink_is_null_or_empty (sink->config.key))
     goto no_destination;
 
-  if (sink->uploader == NULL) {
+  if (!sink->config.split_buffers && sink->uploader == NULL) {
     sink->uploader = gst_s3_multipart_uploader_new (&sink->config);
   }
 
-  if (!sink->uploader)
+  if (!sink->uploader && !sink->config.split_buffers)
     goto init_failed;
 
   g_free (sink->buffer);
@@ -364,8 +377,12 @@ gst_s3_sink_stop (GstBaseSink * basesink)
   gboolean ret = TRUE;
 
   if (sink->buffer) {
-    gst_s3_sink_flush_buffer (sink);
-    ret = gst_s3_uploader_complete (sink->uploader);
+    if (sink->config.split_buffers) {
+      GST_WARNING("Sink does not support uploading on EOS in split-buffers mode");
+    } else {
+      gst_s3_sink_flush_buffer (sink);
+      ret = gst_s3_uploader_complete (sink->uploader);
+    }
 
     g_free (sink->buffer);
     sink->buffer = NULL;
@@ -460,11 +477,17 @@ gst_s3_sink_render (GstBaseSink * base_sink, GstBuffer * buffer)
   n_mem = gst_buffer_n_memory (buffer);
 
   if (n_mem > 0) {
-    if (gst_s3_sink_fill_buffer (sink, buffer)) {
-      flow = GST_FLOW_OK;
+    if (sink->config.split_buffers) {
+      gboolean uploaded = gst_s3_sink_upload_single_buffer(sink, buffer);
+      if (!uploaded) GST_WARNING("Failed to upload single buffer");
+      flow = uploaded ? GST_FLOW_OK : GST_FLOW_ERROR;
     } else {
-      GST_WARNING ("Failed to flush the internal buffer");
-      flow = GST_FLOW_ERROR;
+      if (gst_s3_sink_fill_buffer (sink, buffer)) {
+        flow = GST_FLOW_OK;
+      } else {
+        GST_WARNING ("Failed to flush the internal buffer");
+        flow = GST_FLOW_ERROR;
+      }
     }
   } else {
     flow = GST_FLOW_OK;
@@ -474,8 +497,29 @@ gst_s3_sink_render (GstBaseSink * base_sink, GstBuffer * buffer)
 }
 
 static gboolean
+gst_s3_sink_upload_single_buffer(GstS3Sink * sink, GstBuffer * buffer)
+{
+  gboolean ret = FALSE;
+
+  GstMapInfo map_info = GST_MAP_INFO_INIT;
+  if (gst_buffer_map (buffer, &map_info, GST_MAP_READ)) {
+    ret = gst_s3_upload(&sink->config, map_info.data, map_info.size);
+    gst_buffer_unmap (buffer, &map_info);
+  } else {
+    GST_WARNING ("Failed to map the single buffer for reading");
+  }
+
+  return ret;
+}
+
+static gboolean
 gst_s3_sink_flush_buffer (GstS3Sink * sink)
 {
+  if (sink->config.split_buffers) {
+    GST_WARNING("Flush buffer is not supported in split-buffer mode");
+    return FALSE;
+  }
+
   gboolean ret = TRUE;
 
   if (sink->current_buffer_size) {
@@ -490,6 +534,11 @@ gst_s3_sink_flush_buffer (GstS3Sink * sink)
 static gboolean
 gst_s3_sink_fill_buffer (GstS3Sink * sink, GstBuffer * buffer)
 {
+  if (sink->config.split_buffers) {
+    GST_WARNING("Fill buffer is not supported in split-buffer mode");
+    return FALSE;
+  }
+
   GstMapInfo map_info = GST_MAP_INFO_INIT;
   gsize ptr = 0;
   gsize bytes_to_copy;

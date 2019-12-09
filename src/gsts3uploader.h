@@ -37,14 +37,15 @@ struct _GstS3Uploader {
   GstS3UploaderClass *klass;
 };
 
-GstS3Uploader *gst_s3_uploader_new_default (const GstS3UploaderConfig * config);
-
 void gst_s3_uploader_destroy (GstS3Uploader * uploader);
 
 gboolean gst_s3_uploader_upload_part (GstS3Uploader *
     uploader, const gchar * buffer, gsize size);
 
 gboolean gst_s3_uploader_complete (GstS3Uploader * uploader);
+
+gboolean gst_s3_upload(const GstS3UploaderConfig * config,
+    const void * buffer, gsize size);
 
 G_END_DECLS
 
