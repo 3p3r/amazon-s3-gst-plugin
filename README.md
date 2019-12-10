@@ -3,6 +3,8 @@
 **NOTE:** This is a fork of the original repository and it's tested solely for Linux 64bit. Changelog:
 
 - Replaced Meson with CMake
+- Removed the `init-aws-sdk` property from the sink (it's handled automatically internally now)
+- Added the `split-buffers` property to allow individual frame uploads (similar to _multifilesink_)
 
 A collection of [GStreamer](https://gstreamer.freedesktop.org/) elements to interact
 with the [Amazon Simple Storage Service (S3)](https://aws.amazon.com/s3/).
