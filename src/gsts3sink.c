@@ -61,7 +61,6 @@ enum
   PROP_CA_FILE,
   PROP_REGION,
   PROP_BUFFER_SIZE,
-  PROP_INIT_AWS_SDK,
   PROP_CREDENTIALS,
   PROP_SPLIT_BUFFERS,
   PROP_SPLIT_BUFFERS_WORKER_THREAD_DISPOSE_WAIT,
@@ -83,7 +82,8 @@ static gboolean gst_s3_sink_event (GstBaseSink * sink, GstEvent * event);
 static GstFlowReturn gst_s3_sink_render (GstBaseSink * sink,
     GstBuffer * buffer);
 static gboolean gst_s3_sink_query (GstBaseSink * bsink, GstQuery * query);
-static gboolean gst_s3_sink_upload_single_buffer(GstBuffer * buffer, GstS3Sink * sink);
+static gboolean gst_s3_sink_upload_single_buffer(GstBuffer * buffer,
+    const GstS3UploaderConfig * config);
 static gboolean gst_s3_sink_fill_buffer (GstS3Sink * sink, GstBuffer * buffer);
 static gboolean gst_s3_sink_flush_buffer (GstS3Sink * sink);
 
@@ -134,12 +134,6 @@ g_object_class_install_property (gobject_class, PROP_REGION,
           "Size of buffer in number of bytes", MIN_BUFFER_SIZE,
           G_MAXUINT, DEFAULT_BUFFER_SIZE,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-  g_object_class_install_property (gobject_class, PROP_INIT_AWS_SDK,
-      g_param_spec_boolean ("init-aws-sdk", "Init AWS SDK",
-          "Whether to initialize AWS SDK",
-          GST_S3_UPLOADER_CONFIG_DEFAULT_INIT_AWS_SDK,
-          G_PARAM_READWRITE | GST_PARAM_MUTABLE_READY | G_PARAM_STATIC_STRINGS));
 
   g_object_class_install_property (gobject_class, PROP_CREDENTIALS,
       g_param_spec_boxed ("aws-credentials", "AWS credentials",
@@ -198,8 +192,7 @@ gst_s3_destroy_uploader (GstS3Sink * sink)
 
   if (sink->worker_thread) {
     g_thread_pool_free(
-      sink->worker_thread,
-      !sink->config.split_buffers_worker_thread_dispose_wait,
+      sink->worker_thread, FALSE,
       sink->config.split_buffers_worker_thread_dispose_wait);
     sink->worker_thread = NULL;
   }
@@ -235,9 +228,9 @@ gst_s3_sink_dispose (GObject * object)
 {
   GstS3Sink *sink = GST_S3_SINK (object);
 
-  gst_s3_sink_release_config (&sink->config);
-
   gst_s3_destroy_uploader (sink);
+
+  gst_s3_sink_release_config (&sink->config);
 
   G_OBJECT_CLASS (parent_class)->dispose (object);
 }
@@ -298,9 +291,6 @@ gst_s3_sink_set_property (GObject * object, guint prop_id,
         sink->config.buffer_size = g_value_get_uint (value);
       }
       break;
-    case PROP_INIT_AWS_SDK:
-      sink->config.init_aws_sdk = g_value_get_boolean (value);
-      break;
     case PROP_CREDENTIALS:
       if (sink->config.credentials)
         gst_aws_credentials_free (sink->config.credentials);
@@ -351,9 +341,6 @@ gst_s3_sink_get_property (GObject * object, guint prop_id, GValue * value,
     case PROP_BUFFER_SIZE:
       g_value_set_uint (value, sink->config.buffer_size);
       break;
-    case PROP_INIT_AWS_SDK:
-      g_value_set_boolean (value, sink->config.init_aws_sdk);
-      break;
     case PROP_SPLIT_BUFFERS:
       g_value_set_boolean (value, sink->config.split_buffers);
       break;
@@ -397,7 +384,7 @@ gst_s3_sink_start (GstBaseSink * basesink)
   if (sink->config.split_buffers)
     sink->worker_thread = g_thread_pool_new(
       (GFunc)gst_s3_sink_upload_single_buffer,
-      sink,
+      &sink->config,
       sink->config.split_buffers_worker_thread_max_threads,
       sink->config.split_buffers_worker_thread_exclusive,
       NULL);
@@ -561,13 +548,14 @@ gst_s3_sink_render (GstBaseSink * base_sink, GstBuffer * buffer)
 }
 
 static gboolean
-gst_s3_sink_upload_single_buffer(GstBuffer * buffer, GstS3Sink * sink)
+gst_s3_sink_upload_single_buffer (GstBuffer * buffer,
+  const GstS3UploaderConfig * config)
 {
   gboolean ret = FALSE;
 
   GstMapInfo map_info = GST_MAP_INFO_INIT;
   if (gst_buffer_map (buffer, &map_info, GST_MAP_READ)) {
-    ret = gst_s3_upload(&sink->config, map_info.data, map_info.size);
+    ret = gst_s3_upload(config, map_info.data, map_info.size);
     gst_buffer_unmap (buffer, &map_info);
   } else {
     GST_WARNING ("Failed to map the single buffer for reading");
