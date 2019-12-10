@@ -48,6 +48,28 @@ namespace aws
 {
 namespace s3
 {
+class AWSSDKHandle : public std::enable_shared_from_this<AWSSDKHandle>
+{
+public:
+    AWSSDKHandle() {
+        Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<Logger>());
+        Aws::SDKOptions options;
+        Aws::InitAPI(options);
+    }
+
+    ~AWSSDKHandle() {
+        Aws::ShutdownAPI(Aws::SDKOptions {});
+        Aws::Utils::Logging::ShutdownAWSLogging();
+    }
+
+    using SharedType = std::shared_ptr<AWSSDKHandle>;
+
+    static SharedType Ref() {
+        static auto handle = std::make_shared<AWSSDKHandle>();
+        return handle->shared_from_this();
+    }
+};
+
 class Logger : public Aws::Utils::Logging::LogSystemInterface
 {
 public:
@@ -331,6 +353,8 @@ private:
 
     Aws::S3::Model::CreateMultipartUploadOutcome _upload_outcome;
 
+    AWSSDKHandle::SharedType _sdk_handle;
+
     std::unique_ptr<Aws::S3::S3Client> _s3_client;
 
     std::condition_variable _upload_completed_cv;
@@ -341,7 +365,6 @@ private:
 
     int _part_counter = 0;
     bool _verify_hash = false;
-    bool _init_sdk = false;
 };
 
 // TODO: There's a few things I didn't implement because they're not critical (yet), but might
@@ -358,20 +381,12 @@ MultipartUploader::MultipartUploader(const GstS3UploaderConfig *config) :
     _bucket(config->bucket),
     _key(config->key),
     _part_states(std::make_shared<PartStateCollection>(false)),
-    _init_sdk(config->init_aws_sdk)
+    _sdk_handle(AWSSDKHandle::Ref())
 {
-}
-
-void MultipartUploader::free_sdk()
-{
-    Aws::ShutdownAPI(Aws::SDKOptions {});
-    Aws::Utils::Logging::ShutdownAWSLogging();    
 }
 
 MultipartUploader::~MultipartUploader()
 {
-    if (_init_sdk) free_sdk();
-
     if (_buffer_manager)
     {
         for (auto buffer : _buffer_manager->ShutdownAndWait(_buffer_count))
@@ -392,17 +407,8 @@ void MultipartUploader::_init_buffer_manager(size_t buffer_count, size_t buffer_
     }
 }
 
-void MultipartUploader::init_sdk()
-{
-    Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<Logger>());
-    Aws::SDKOptions options;
-    Aws::InitAPI(options);    
-}
-
 bool MultipartUploader::_init_uploader(const GstS3UploaderConfig * config)
 {
-    if (_init_sdk) init_sdk();
-
     Aws::Client::ClientConfiguration client_config;
     if (!is_null_or_empty(config->ca_file))
     {
@@ -586,16 +592,6 @@ static GstS3UploaderClass default_class = {
   gst_s3_multipart_uploader_upload_part,
   gst_s3_multipart_uploader_complete
 };
-
-void gst_s3_init_sdk()
-{
-    MultipartUploader::init_sdk();
-}
-
-void gst_s3_free_sdk()
-{
-    MultipartUploader::free_sdk();
-}
 
 GstS3Uploader *
 gst_s3_multipart_uploader_new (const GstS3UploaderConfig * config)
