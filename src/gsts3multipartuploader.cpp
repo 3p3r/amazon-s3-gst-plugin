@@ -48,28 +48,6 @@ namespace aws
 {
 namespace s3
 {
-class AWSSDKHandle : public std::enable_shared_from_this<AWSSDKHandle>
-{
-public:
-    AWSSDKHandle() {
-        Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<Logger>());
-        Aws::SDKOptions options;
-        Aws::InitAPI(options);
-    }
-
-    ~AWSSDKHandle() {
-        Aws::ShutdownAPI(Aws::SDKOptions {});
-        Aws::Utils::Logging::ShutdownAWSLogging();
-    }
-
-    using SharedType = std::shared_ptr<AWSSDKHandle>;
-
-    static SharedType Ref() {
-        static auto handle = std::make_shared<AWSSDKHandle>();
-        return handle->shared_from_this();
-    }
-};
-
 class Logger : public Aws::Utils::Logging::LogSystemInterface
 {
 public:
@@ -129,6 +107,28 @@ private:
             case LogLevel::Debug: return GST_LEVEL_DEBUG;
             default: return GST_LEVEL_TRACE;
         }
+    }
+};
+
+class AWSSDKHandle : public std::enable_shared_from_this<AWSSDKHandle>
+{
+public:
+    AWSSDKHandle() {
+        Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<Logger>());
+        Aws::SDKOptions options;
+        Aws::InitAPI(options);
+    }
+
+    ~AWSSDKHandle() {
+        Aws::ShutdownAPI(Aws::SDKOptions {});
+        Aws::Utils::Logging::ShutdownAWSLogging();
+    }
+
+    using SharedType = std::shared_ptr<AWSSDKHandle>;
+
+    static SharedType Ref() {
+        static auto handle = std::make_shared<AWSSDKHandle>();
+        return handle->shared_from_this();
     }
 };
 
