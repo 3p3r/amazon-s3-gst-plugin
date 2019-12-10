@@ -27,6 +27,9 @@ typedef struct _GstS3MultipartUploader GstS3MultipartUploader;
 
 GstS3Uploader * gst_s3_multipart_uploader_new (const GstS3UploaderConfig * config);
 
+void gst_s3_init_sdk();
+void gst_s3_free_sdk();
+
 G_END_DECLS
 
 #endif /* __GST_S3_MULTIPART_UPLOADER_H__ */
