@@ -379,7 +379,7 @@ private:
 
 MultipartUploader::MultipartUploader(const GstS3UploaderConfig *config) :
     _bucket(config->bucket),
-    _key(config->key),
+    _key(config->location),
     _part_states(std::make_shared<PartStateCollection>(false)),
     _sdk_handle(AWSSDKHandle::Ref())
 {
@@ -603,10 +603,10 @@ gst_s3_multipart_uploader_new (const GstS3UploaderConfig * config)
   g_return_val_if_fail (config, NULL);
 
   gchar upload_key[S3_MAX_FILENAME_SIZE];
-  gchar *format = config->key;
+  gchar *format = config->location;
   GstS3UploaderConfig config_shallow_copy = *config;
   g_snprintf(upload_key, S3_MAX_FILENAME_SIZE, format, g_get_real_time());
-  config_shallow_copy.key = upload_key;
+  config_shallow_copy.location = upload_key;
 
   auto impl = MultipartUploader::create(&config_shallow_copy);
   g_assert_nonnull(impl);

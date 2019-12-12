@@ -31,7 +31,7 @@ G_BEGIN_DECLS
 typedef struct {
   gchar * region;
   gchar * bucket;
-  gchar * key;
+  gchar * location;
   gchar * content_type;
   gchar * ca_file;
   GstAWSCredentials * credentials;

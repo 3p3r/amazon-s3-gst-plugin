@@ -56,7 +56,7 @@ enum
 {
   PROP_0,
   PROP_BUCKET,
-  PROP_KEY,
+  PROP_LOCATION,
   PROP_CONTENT_TYPE,
   PROP_CA_FILE,
   PROP_REGION,
@@ -103,9 +103,9 @@ gst_s3_sink_class_init (GstS3SinkClass * klass)
           "The bucket of the file to write", NULL,
           G_PARAM_READWRITE | GST_PARAM_MUTABLE_READY | G_PARAM_STATIC_STRINGS));
 
-  g_object_class_install_property (gobject_class, PROP_KEY,
-      g_param_spec_string ("key", "S3 key",
-          "The key of the file to write", NULL,
+  g_object_class_install_property (gobject_class, PROP_LOCATION,
+      g_param_spec_string ("location", "S3 key",
+          "The location (S3 key) of the file to write", NULL,
           G_PARAM_READWRITE | GST_PARAM_MUTABLE_READY | G_PARAM_STATIC_STRINGS));
 
   g_object_class_install_property (gobject_class, PROP_CONTENT_TYPE,
@@ -173,7 +173,7 @@ gst_s3_sink_release_config (GstS3UploaderConfig * config)
 {
   g_free (config->region);
   g_free (config->bucket);
-  g_free (config->key);
+  g_free (config->location);
   g_free (config->content_type);
   g_free (config->ca_file);
   gst_aws_credentials_free (config->credentials);
@@ -224,9 +224,9 @@ gst_s3_sink_set_property (GObject * object, guint prop_id,
       gst_s3_sink_set_string_property (sink, g_value_get_string (value),
           &sink->config.bucket, "bucket");
       break;
-    case PROP_KEY:
+    case PROP_LOCATION:
       gst_s3_sink_set_string_property (sink, g_value_get_string (value),
-          &sink->config.key, "key");
+          &sink->config.location, "location");
       break;
     case PROP_CONTENT_TYPE:
       gst_s3_sink_set_string_property (sink, g_value_get_string (value),
@@ -270,8 +270,8 @@ gst_s3_sink_get_property (GObject * object, guint prop_id, GValue * value,
     case PROP_BUCKET:
       g_value_set_string (value, sink->config.bucket);
       break;
-    case PROP_KEY:
-      g_value_set_string (value, sink->config.key);
+    case PROP_LOCATION:
+      g_value_set_string (value, sink->config.location);
       break;
     case PROP_CONTENT_TYPE:
       g_value_set_string (value, sink->config.content_type);
@@ -303,7 +303,7 @@ gst_s3_sink_start (GstBaseSink * basesink)
   GstS3Sink *sink = GST_S3_SINK (basesink);
 
   if (gst_s3_sink_is_null_or_empty (sink->config.bucket)
-      || gst_s3_sink_is_null_or_empty (sink->config.key))
+      || gst_s3_sink_is_null_or_empty (sink->config.location))
     goto no_destination;
 
   if (sink->uploader == NULL) {
@@ -321,7 +321,7 @@ gst_s3_sink_start (GstBaseSink * basesink)
   sink->total_bytes_written = 0;
 
   GST_DEBUG_OBJECT (sink, "started S3 upload %s %s",
-      sink->config.bucket, sink->config.key);
+      sink->config.bucket, sink->config.location);
 
   sink->is_started = TRUE;
 
