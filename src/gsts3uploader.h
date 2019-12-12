@@ -44,9 +44,6 @@ gboolean gst_s3_uploader_upload_part (GstS3Uploader *
 
 gboolean gst_s3_uploader_complete (GstS3Uploader * uploader);
 
-gboolean gst_s3_upload(const GstS3UploaderConfig * config,
-    const void * buffer, gsize size);
-
 G_END_DECLS
 
 #endif /* __GST_S3_UPLOADER_H__ */

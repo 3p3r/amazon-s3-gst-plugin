@@ -62,10 +62,6 @@ enum
   PROP_REGION,
   PROP_BUFFER_SIZE,
   PROP_CREDENTIALS,
-  PROP_SPLIT_BUFFERS,
-  PROP_SPLIT_BUFFERS_WORKER_THREAD_DISPOSE_WAIT,
-  PROP_SPLIT_BUFFERS_WORKER_THREAD_MAX_THREADS,
-  PROP_SPLIT_BUFFERS_WORKER_THREAD_EXCLUSIVE,
   PROP_LAST
 };
 
@@ -82,8 +78,7 @@ static gboolean gst_s3_sink_event (GstBaseSink * sink, GstEvent * event);
 static GstFlowReturn gst_s3_sink_render (GstBaseSink * sink,
     GstBuffer * buffer);
 static gboolean gst_s3_sink_query (GstBaseSink * bsink, GstQuery * query);
-static gboolean gst_s3_sink_upload_single_buffer(GstBuffer * buffer,
-    const GstS3UploaderConfig * config);
+
 static gboolean gst_s3_sink_fill_buffer (GstS3Sink * sink, GstBuffer * buffer);
 static gboolean gst_s3_sink_flush_buffer (GstS3Sink * sink);
 
@@ -140,35 +135,6 @@ g_object_class_install_property (gobject_class, PROP_REGION,
           "The AWS credentials to use", GST_TYPE_AWS_CREDENTIALS,
           G_PARAM_WRITABLE | GST_PARAM_MUTABLE_READY | G_PARAM_STATIC_STRINGS));
 
-  g_object_class_install_property (gobject_class, PROP_SPLIT_BUFFERS,
-      g_param_spec_boolean ("split-buffers", "Split Buffers",
-          "Split Buffers Into Individual Uploads. "
-          "When using this option, you can use a sprintf format as your key with %lld. "
-          "The sink automatically fills your key name with Unix timestamp in milliseconds.",
-          GST_S3_UPLOADER_CONFIG_DEFAULT_SPLIT_BUFFERS,
-          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT));
-
-  g_object_class_install_property (gobject_class, PROP_SPLIT_BUFFERS_WORKER_THREAD_DISPOSE_WAIT,
-      g_param_spec_boolean ("split-buffers-thread-pool-dispose-wait", "Split Buffers Thread Pool Dispose Wait",
-          "Wait For Queued Buffers In the Split Buffers Thread Pool Upon Shutdown (EOS).",
-          GST_S3_UPLOADER_CONFIG_DEFAULT_SPLIT_BUFFERS_WT_DISPOSE_WAIT,
-          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT));
-
-  g_object_class_install_property (gobject_class, PROP_SPLIT_BUFFERS_WORKER_THREAD_EXCLUSIVE,
-      g_param_spec_boolean ("split-buffers-thread-pool-exclusive", "Split Buffers Thread Pool Exclusive",
-          "Whether If Split Buffer's Thread Pool Is Exclusive To This Element Or Not. "
-          "When set to FALSE, thread pool can be shared with multiple elements.",
-          GST_S3_UPLOADER_CONFIG_DEFAULT_SPLIT_BUFFERS_WT_EXCLUSIVE,
-          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT));
-
-  g_object_class_install_property (gobject_class, PROP_SPLIT_BUFFERS_WORKER_THREAD_MAX_THREADS,
-      g_param_spec_int ("split-buffers-thread-pool-max-threads", "Split Buffers Thread Pool Max Threads",
-          "Max Number Of Threads Used By Split Buffer's Thread Pool. "
-          "Set to 0 for the same number of threads as your CPU cores. "
-          "Set to -1 for unlimited number of threads. ",
-          G_MININT, G_MAXINT, GST_S3_UPLOADER_CONFIG_DEFAULT_SPLIT_BUFFERS_WT_MAX_THREADS,
-          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT));
-
   gst_element_class_set_static_metadata (gstelement_class,
       "S3 Sink",
       "Sink/S3", "Write stream to an Amazon S3 bucket",
@@ -189,13 +155,6 @@ gst_s3_destroy_uploader (GstS3Sink * sink)
     gst_s3_uploader_destroy (sink->uploader);
     sink->uploader = NULL;
   }
-
-  if (sink->worker_thread) {
-    g_thread_pool_free(
-      sink->worker_thread, FALSE,
-      sink->config.split_buffers_worker_thread_dispose_wait);
-    sink->worker_thread = NULL;
-  }
 }
 
 static void
@@ -205,7 +164,6 @@ gst_s3_sink_init (GstS3Sink * s3sink)
   s3sink->config.credentials = gst_aws_credentials_new_default ();
   s3sink->uploader = NULL;
   s3sink->is_started = FALSE;
-  s3sink->worker_thread = NULL;
 
   gst_base_sink_set_sync (GST_BASE_SINK (s3sink), FALSE);
 }
@@ -296,20 +254,6 @@ gst_s3_sink_set_property (GObject * object, guint prop_id,
         gst_aws_credentials_free (sink->config.credentials);
       sink->config.credentials = gst_aws_credentials_copy (g_value_get_boxed (value));
       break;
-    case PROP_SPLIT_BUFFERS:
-      sink->config.split_buffers = g_value_get_boolean (value);
-      break;
-    case PROP_SPLIT_BUFFERS_WORKER_THREAD_DISPOSE_WAIT:
-      sink->config.split_buffers_worker_thread_dispose_wait = g_value_get_boolean (value);
-      break;
-    case PROP_SPLIT_BUFFERS_WORKER_THREAD_EXCLUSIVE:
-      sink->config.split_buffers_worker_thread_exclusive = g_value_get_boolean (value);
-      break;
-    case PROP_SPLIT_BUFFERS_WORKER_THREAD_MAX_THREADS:
-      sink->config.split_buffers_worker_thread_max_threads = g_value_get_int (value) == 0
-        ? g_get_num_processors()
-        : g_value_get_int (value);
-      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -341,18 +285,6 @@ gst_s3_sink_get_property (GObject * object, guint prop_id, GValue * value,
     case PROP_BUFFER_SIZE:
       g_value_set_uint (value, sink->config.buffer_size);
       break;
-    case PROP_SPLIT_BUFFERS:
-      g_value_set_boolean (value, sink->config.split_buffers);
-      break;
-    case PROP_SPLIT_BUFFERS_WORKER_THREAD_DISPOSE_WAIT:
-      g_value_set_boolean (value, sink->config.split_buffers_worker_thread_dispose_wait);
-      break;
-    case PROP_SPLIT_BUFFERS_WORKER_THREAD_EXCLUSIVE:
-      g_value_set_boolean (value, sink->config.split_buffers_worker_thread_exclusive);
-      break;
-    case PROP_SPLIT_BUFFERS_WORKER_THREAD_MAX_THREADS:
-      g_value_set_int (value, sink->config.split_buffers_worker_thread_max_threads);
-      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -374,22 +306,11 @@ gst_s3_sink_start (GstBaseSink * basesink)
       || gst_s3_sink_is_null_or_empty (sink->config.key))
     goto no_destination;
 
-  if (!sink->config.split_buffers && sink->uploader == NULL) {
+  if (sink->uploader == NULL) {
     sink->uploader = gst_s3_multipart_uploader_new (&sink->config);
   }
 
-  if (!sink->uploader && !sink->config.split_buffers)
-    goto init_failed;
-  
-  if (sink->config.split_buffers)
-    sink->worker_thread = g_thread_pool_new(
-      (GFunc)gst_s3_sink_upload_single_buffer,
-      &sink->config,
-      sink->config.split_buffers_worker_thread_max_threads,
-      sink->config.split_buffers_worker_thread_exclusive,
-      NULL);
-
-  if (!sink->worker_thread && !sink->config.split_buffers)
+  if (!sink->uploader)
     goto init_failed;
 
   g_free (sink->buffer);
@@ -430,12 +351,8 @@ gst_s3_sink_stop (GstBaseSink * basesink)
   gboolean ret = TRUE;
 
   if (sink->buffer) {
-    if (sink->config.split_buffers) {
-      GST_WARNING("Sink does not support uploading on EOS in split-buffers mode");
-    } else {
-      gst_s3_sink_flush_buffer (sink);
-      ret = gst_s3_uploader_complete (sink->uploader);
-    }
+    gst_s3_sink_flush_buffer (sink);
+    ret = gst_s3_uploader_complete (sink->uploader);
 
     g_free (sink->buffer);
     sink->buffer = NULL;
@@ -522,7 +439,7 @@ static GstFlowReturn
 gst_s3_sink_render (GstBaseSink * base_sink, GstBuffer * buffer)
 {
   GstS3Sink *sink;
-  GstFlowReturn flow = GST_FLOW_OK;
+  GstFlowReturn flow;
   guint8 n_mem;
 
   sink = GST_S3_SINK (base_sink);
@@ -530,15 +447,11 @@ gst_s3_sink_render (GstBaseSink * base_sink, GstBuffer * buffer)
   n_mem = gst_buffer_n_memory (buffer);
 
   if (n_mem > 0) {
-    if (sink->config.split_buffers) {
-      g_thread_pool_push(sink->worker_thread, gst_buffer_copy(buffer), NULL);
+    if (gst_s3_sink_fill_buffer (sink, buffer)) {
+      flow = GST_FLOW_OK;
     } else {
-      if (gst_s3_sink_fill_buffer (sink, buffer)) {
-        flow = GST_FLOW_OK;
-      } else {
-        GST_WARNING ("Failed to flush the internal buffer");
-        flow = GST_FLOW_ERROR;
-      }
+      GST_WARNING ("Failed to flush the internal buffer");
+      flow = GST_FLOW_ERROR;
     }
   } else {
     flow = GST_FLOW_OK;
@@ -548,31 +461,8 @@ gst_s3_sink_render (GstBaseSink * base_sink, GstBuffer * buffer)
 }
 
 static gboolean
-gst_s3_sink_upload_single_buffer (GstBuffer * buffer,
-  const GstS3UploaderConfig * config)
-{
-  gboolean ret = FALSE;
-
-  GstMapInfo map_info = GST_MAP_INFO_INIT;
-  if (gst_buffer_map (buffer, &map_info, GST_MAP_READ)) {
-    ret = gst_s3_upload(config, map_info.data, map_info.size);
-    gst_buffer_unmap (buffer, &map_info);
-  } else {
-    GST_WARNING ("Failed to map the single buffer for reading");
-  }
-
-  gst_buffer_unref(buffer);
-  return ret;
-}
-
-static gboolean
 gst_s3_sink_flush_buffer (GstS3Sink * sink)
 {
-  if (sink->config.split_buffers) {
-    GST_WARNING("Flush buffer is not supported in split-buffer mode");
-    return FALSE;
-  }
-
   gboolean ret = TRUE;
 
   if (sink->current_buffer_size) {
@@ -587,11 +477,6 @@ gst_s3_sink_flush_buffer (GstS3Sink * sink)
 static gboolean
 gst_s3_sink_fill_buffer (GstS3Sink * sink, GstBuffer * buffer)
 {
-  if (sink->config.split_buffers) {
-    GST_WARNING("Fill buffer is not supported in split-buffer mode");
-    return FALSE;
-  }
-
   GstMapInfo map_info = GST_MAP_INFO_INIT;
   gsize ptr = 0;
   gsize bytes_to_copy;

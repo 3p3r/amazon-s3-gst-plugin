@@ -59,7 +59,6 @@ struct _GstS3Sink {
   gsize total_bytes_written;
 
   gboolean is_started;
-  GThreadPool *worker_thread;
 };
 
 struct _GstS3SinkClass {
