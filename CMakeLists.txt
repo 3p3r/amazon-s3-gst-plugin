@@ -17,7 +17,9 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/tools/share/cmake)
 
+set(BUILD_SHARED_LIBS ON)
 find_package(AWSSDK REQUIRED COMPONENTS s3 sts)
+
 find_package(GStreamer REQUIRED COMPONENTS base check)
 find_package(GLIB REQUIRED COMPONENTS gobject)
 find_package(Threads REQUIRED)
@@ -34,7 +36,8 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src
                     ${GLIB_INCLUDE_DIRS}
                     ${AWSSDK_INCLUDE_DIRS})
 
-link_libraries(${GLIB_LIBRARIES}
+link_libraries(Threads::Threads
+               ${GLIB_LIBRARIES}
                ${GLIB_GOBJECT_LIBRARIES}
                ${ORC_LIBRARIES}
                ${GSTREAMER_LIBRARIES}
