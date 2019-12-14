@@ -20,7 +20,7 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/tools/share/cmake)
 set(BUILD_SHARED_LIBS ON)
 find_package(AWSSDK REQUIRED COMPONENTS s3 sts)
 
-find_package(GStreamer REQUIRED COMPONENTS base check)
+find_package(GStreamer REQUIRED COMPONENTS base check video)
 find_package(GLIB REQUIRED COMPONENTS gobject)
 find_package(Threads REQUIRED)
 find_package(Orc REQUIRED)
@@ -29,6 +29,7 @@ add_compile_options(-m64 -DHAVE_ORC=1)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src
                     ${CMAKE_CURRENT_BINARY_DIR}
+                    ${GSTREAMER_VIDEO_INCLUDE_DIRS}
                     ${GSTREAMER_CHECK_INCLUDE_DIRS}
                     ${GSTREAMER_BASE_INCLUDE_DIRS}
                     ${GSTREAMER_INCLUDE_DIRS}
@@ -43,6 +44,7 @@ link_libraries(Threads::Threads
                ${GSTREAMER_LIBRARIES}
                ${GSTREAMER_BASE_LIBRARIES}
                ${GSTREAMER_CHECK_LIBRARIES}
+               ${GSTREAMER_VIDEO_LIBRARIES}
                ${AWSSDK_LINK_LIBRARIES})
 
 set(PLUGIN_PACKAGE "amazon-s3-gst-plugin")
@@ -57,7 +59,7 @@ set(GST_S3_PUBLIC_HEADERS src/gstawscredentials.h src/gstawscredentials.hpp)
 add_library(gstawscredentials SHARED src/gstawscredentials.cpp)
 add_library(multipartuploader STATIC src/gsts3multipartuploader.cpp)
 add_library(gsts3elements SHARED src/gsts3elements.c src/gsts3sink.c
-                                 src/gsts3uploader.c)
+                                 src/gsts3uploader.c src/gstsplitmuxsink.c)
 
 target_link_libraries(gsts3elements multipartuploader gstawscredentials)
 

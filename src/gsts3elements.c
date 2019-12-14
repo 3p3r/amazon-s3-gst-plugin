@@ -22,12 +22,16 @@
 #include <gst/gst.h>
 
 #include "gsts3sink.h"
+#include "gstsplitmuxsink.h"
 
 static gboolean
 plugin_init (GstPlugin * plugin)
 {
   if (!gst_element_register (plugin, "s3sink", GST_RANK_NONE,
           gst_s3_sink_get_type ()))
+    return FALSE;
+  
+  if (!register_splitmuxsink(plugin))
     return FALSE;
 
   return TRUE;
