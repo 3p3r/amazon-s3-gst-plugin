@@ -51,17 +51,13 @@ set(PLUGIN_PACKAGE "amazon-s3-gst-plugin")
 set(PLUGIN_VERSION "0.1.0")
 configure_file(src/config.h.in config.h @ONLY)
 
-set(GST_S3_ELEMENT_SOURCES src/gsts3elements.c src/gsts3sink.c
-                           src/gsts3uploader.c)
-
-set(GST_S3_PUBLIC_HEADERS src/gstawscredentials.h src/gstawscredentials.hpp)
-
-add_library(gstawscredentials SHARED src/gstawscredentials.cpp)
-add_library(multipartuploader STATIC src/gsts3multipartuploader.cpp)
-add_library(gsts3elements SHARED src/gsts3elements.c src/gsts3sink.c
-                                 src/gsts3uploader.c src/gstsplitmuxsink.c)
-
-target_link_libraries(gsts3elements multipartuploader gstawscredentials)
+add_library(gsts3elements SHARED
+            src/gsts3elements.c
+            src/gsts3sink.c
+            src/gsts3uploader.c
+            src/gstsplitmuxsink.c
+            src/gsts3multipartuploader.cpp
+            src/gstawscredentials.cpp)
 
 enable_testing()
 add_executable(gsts3elements-check tests/check/s3sink.c)
