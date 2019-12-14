@@ -596,19 +596,9 @@ static GstS3UploaderClass default_class = {
 GstS3Uploader *
 gst_s3_multipart_uploader_new (const GstS3UploaderConfig * config)
 {
-  // https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
-  // max filename size is 1024 bytes on S3
-  const static auto S3_MAX_FILENAME_SIZE = 1024;
-
   g_return_val_if_fail (config, NULL);
 
-  gchar upload_key[S3_MAX_FILENAME_SIZE];
-  gchar *format = config->location;
-  GstS3UploaderConfig config_shallow_copy = *config;
-  g_snprintf(upload_key, S3_MAX_FILENAME_SIZE, format, g_get_real_time());
-  config_shallow_copy.location = upload_key;
-
-  auto impl = MultipartUploader::create(&config_shallow_copy);
+  auto impl = MultipartUploader::create(config);
   g_assert_nonnull(impl);
 
   return reinterpret_cast < GstS3Uploader * >(new GstS3MultipartUploader (std::move (impl)));
